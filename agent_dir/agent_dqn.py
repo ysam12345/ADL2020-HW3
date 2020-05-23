@@ -30,20 +30,8 @@ class ReplayBuffer(object):
                           'reward': reward,
                           'next_state': next_state})
 
-    def sample2batch(self, sample):
-        batch_data = {
-            'state': [],
-            'action': [],
-            'reward': [],
-            'next_state': []
-        }
-        for s in sample:
-            for k in s:
-                batch_data[k].append(s[k])
-        return batch_data
-
     def sample(self, batch_size):
-        return self.sample2batch(random.sample(self.pool, batch_size))
+        return random.sample(self.pool, batch_size)
 
     def print_pool(self):
         print(self.pool)
@@ -147,7 +135,7 @@ class AgentDQN(Agent):
             state = torch.from_numpy(state).permute(2, 0, 1).unsqueeze(0)
         if not test and random.random() < self.epsilon:
             action = self.env.action_space.sample()
-            self.epsilon = max(0, 1 - 10 * (self.steps+1) / (self.num_timesteps/3))
+            self.epsilon /= (self.steps + 1)
         else:
             state = state.cuda() if use_cuda else state
             prediction = self.online_net(state)
@@ -157,36 +145,11 @@ class AgentDQN(Agent):
     def update(self):
         # TODO:
         # step 1: Sample some stored experiences as training examples.
-        update_start = time()
-        experience = self.replay_buffer.sample(self.batch_size)
+        
+        experiences = self.replay_buffer.sample(self.batch_size)
         loss = torch.Tensor([0])
         loss = loss.cuda() if use_cuda else loss
-        # print(experience['state'])
-        state = torch.cat(experience['state'])
-        #action = torch.cat(experience['action'])
-        action = experience['action']
-        reward = torch.Tensor(experience['reward'])
-        #reward = experience['reward']
-        next_state = torch.cat(experience['next_state'])
-
-        state = state.cuda() if use_cuda else state
-        reward = reward.cuda() if use_cuda else reward
-        next_state = next_state.cuda() if use_cuda else next_state
-
-        # step 2: Compute Q(s_t, a) with your model.
-        o_q = self.online_net(state)[0][action]
-        # step 3: Compute Q(s_{t+1}, a) with target model.
-        with torch.no_grad():
-            t_q = self.target_net(next_state)
-        # step 4: Compute the expected Q values: rewards + gamma * max(Q(s_{t+1}, a))
-        expected_q = reward + self.GAMMA * t_q.max(1)[0]
-        # step 5: Compute temporal difference loss
-        loss = ((o_q-expected_q)**2).mean()
-        # HINT:
-        # 1. You should not backprop to the target model in step 3 (Use torch.no_grad)
-        # 2. You should carefully deal with gamma * max(Q(s_{t+1}, a)) when it
-        #    is the terminal state.
-        '''
+    
         for experience in experiences:
             # step 2: Compute Q(s_t, a) with your model.
             experience['state'] = experience['state'].cuda() if use_cuda else experience['state']
@@ -205,7 +168,7 @@ class AgentDQN(Agent):
             # 1. You should not backprop to the target model in step 3 (Use torch.no_grad)
             # 2. You should carefully deal with gamma * max(Q(s_{t+1}, a)) when it
             #    is the terminal state.
-        '''
+        loss /= self.batch_size
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
