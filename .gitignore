@@ -3,3 +3,4 @@ __pycache__
 *.cpt
 # avoid plot output
 *.json
+*.png
