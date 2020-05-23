@@ -1,3 +1,5 @@
 __pycache__
 # avoid weight files
 *.cpt
+# avoid plot output
+*.json
