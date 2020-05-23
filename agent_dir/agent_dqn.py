@@ -147,7 +147,8 @@ class AgentDQN(Agent):
             state = torch.from_numpy(state).permute(2, 0, 1).unsqueeze(0)
         if not test and random.random() < self.epsilon:
             action = self.env.action_space.sample()
-            self.epsilon = max(0, 1 - 10 * (self.steps+1) / (self.num_timesteps/3))
+            self.epsilon /= (self.steps + 1)
+            #self.epsilon = max(0, 1 - 10 * (self.steps+1) / (self.num_timesteps/3))
         else:
             state = state.cuda() if use_cuda else state
             prediction = self.online_net(state)
@@ -174,14 +175,14 @@ class AgentDQN(Agent):
         next_state = next_state.cuda() if use_cuda else next_state
 
         # step 2: Compute Q(s_t, a) with your model.
-        o_q = self.online_net(state)[0][action]
+        o_q = self.online_net(state)
         # step 3: Compute Q(s_{t+1}, a) with target model.
         with torch.no_grad():
             t_q = self.target_net(next_state)
         # step 4: Compute the expected Q values: rewards + gamma * max(Q(s_{t+1}, a))
         expected_q = reward + self.GAMMA * t_q.max(1)[0]
         # step 5: Compute temporal difference loss
-        loss = ((o_q-expected_q)**2).mean()
+        loss = ((torch.stack([o_q[i][action[i]]for i in range(self.batch_size)])-expected_q)**2).mean()
         # HINT:
         # 1. You should not backprop to the target model in step 3 (Use torch.no_grad)
         # 2. You should carefully deal with gamma * max(Q(s_{t+1}, a)) when it
