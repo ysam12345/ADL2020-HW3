@@ -86,7 +86,7 @@ class AgentDQN(Agent):
         self.online_net = self.online_net.cuda() if use_cuda else self.online_net
 
         if args.test_dqn:
-            self.load('dqn_3605')
+            self.load('dqn_2239')
 
         # discounted reward
         self.GAMMA = 0.99
@@ -147,7 +147,7 @@ class AgentDQN(Agent):
             state = torch.from_numpy(state).permute(2, 0, 1).unsqueeze(0)
         if not test and random.random() < self.epsilon:
             action = self.env.action_space.sample()
-            self.epsilon = 1 - (self.steps + 1/self.num_timesteps) * 10
+            self.epsilon = max(0, 1 - 10 * (self.steps+1) / (self.num_timesteps/3))
         else:
             state = state.cuda() if use_cuda else state
             prediction = self.online_net(state)
@@ -191,13 +191,20 @@ class AgentDQN(Agent):
             # step 2: Compute Q(s_t, a) with your model.
             experience['state'] = experience['state'].cuda() if use_cuda else experience['state']
             experience['next_state'] = experience['next_state'].cuda() if use_cuda else experience['next_state']
+            
             o_q = self.online_net(experience['state'])[0][experience['action']]
+            # step 3: Compute Q(s_{t+1}, a) with target model.
             with torch.no_grad():
                 t_q = self.target_net(experience['next_state'])[0]
+            # step 4: Compute the expected Q values: rewards + gamma * max(Q(s_{t+1}, a))
             expected_q = experience['reward'] + self.GAMMA * max(t_q)
+            # step 5: Compute temporal difference loss
             diff = (o_q - expected_q)**2
             loss += diff
-        loss /= self.batch_size
+            # HINT:
+            # 1. You should not backprop to the target model in step 3 (Use torch.no_grad)
+            # 2. You should carefully deal with gamma * max(Q(s_{t+1}, a)) when it
+            #    is the terminal state.
         '''
         self.optimizer.zero_grad()
         loss.backward()
@@ -252,8 +259,8 @@ class AgentDQN(Agent):
                 self.display_freq
 
             if episodes_done_num % self.display_freq == 0:
-                print('Time: %d | Episode: %d | Steps: %d/%d | Avg reward: %f | loss: %f ' %
-                      (time()-start_time, episodes_done_num, self.steps, self.num_timesteps, total_reward / self.display_freq, loss))
+                print('Time: %d | Episode: %d | Steps: %d/%d | Avg reward: %f | loss: %f | epsilon %f' %
+                      (time()-start_time, episodes_done_num, self.steps, self.num_timesteps, total_reward / self.display_freq, loss, self.epsilon ))
                 total_reward = 0
 
             episodes_done_num += 1
