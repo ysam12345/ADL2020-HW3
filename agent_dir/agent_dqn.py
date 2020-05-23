@@ -147,7 +147,7 @@ class AgentDQN(Agent):
             state = torch.from_numpy(state).permute(2, 0, 1).unsqueeze(0)
         if not test and random.random() < self.epsilon:
             action = self.env.action_space.sample()
-            self.epsilon = max(0, 1 - 10 * (self.steps+1) / (self.num_timesteps/3))
+            self.epsilon = max(0.05, 1 - (self.steps+1) / (self.num_timesteps/3))
         else:
             state = state.cuda() if use_cuda else state
             prediction = self.online_net(state)
