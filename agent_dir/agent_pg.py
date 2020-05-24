@@ -89,7 +89,7 @@ class AgentPG(Agent):
         for i in range(len(reward)):
             p += self.get_probability(self.states[i], self.actions[i])
             q += self.probs[i]
-        z = exp(p) / exp(q)
+        z = exp(p) / exp(q) if exp(q) else 0
         b = z * sum(reward) / len(reward)
 
 
