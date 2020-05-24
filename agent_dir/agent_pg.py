@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from math import log
+from math import log, exp
 import json
 from agent_dir.agent import Agent
 from environment import Environment
@@ -40,8 +40,8 @@ class AgentPG(Agent):
         # optimizer
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=3e-3)
 
-        # saved rewards and actions
-        self.rewards, self.saved_actions = [], []
+        # saved rewards, states and actions
+        self.rewards, self.states, self.actions, self.probs = [], [], [], []
 
 
     def save(self, save_path):
@@ -53,60 +53,23 @@ class AgentPG(Agent):
         self.model.load_state_dict(torch.load(load_path))
 
     def init_game_setting(self):
-        self.rewards, self.saved_actions = [], []
-    '''
-    def make_action(self, state, test=False):
-        # action = self.env.action_space.sample() # TODO: Replace this line!
-        # 1. Use your model to output distribution over actions and sample from it.
-        #    HINT: torch.distributions.Categorical 
-        # 2. Save action probability in self.saved_action
-
-        state_tensor = torch.Tensor([state]).to(DEVICE)
-        self.model.eval()
-        prediction = self.model(state_tensor)
-        #print(prediction)
-        probability = torch.distributions.Categorical(prediction)
-        action = probability.sample().cpu().numpy()[0]
-        #print(action)
-        self.model.train()
-        self.saved_actions.append((action, probability.probs[0].cpu().detach().numpy()))
-       
-        #print(probability.probs[0].detach().numpy())
-        return action
-    '''
-    '''
-    def update(self):
-        # TODO:
-        # discount reward
-        # R_i = r_i + GAMMA * R_{i+1}
-        #print(len(self.rewards))
-        #print(len(self.saved_actions))
-        R = []
-        
-        for i in range(len(self.rewards)):
-            R.append(sum([self.gamma**j * self.rewards[j] for j in range(len(self.rewards)-i)]))
-       	
-            
-        #print(R)
-        # TODO:
-        # compute PG loss
-        # loss = sum(-R_i * log(action_prob))
-        
-        loss = sum([-R[i] * log(self.saved_actions[i][1][self.saved_actions[i][0]]) for i in range(len(R))])
-        loss = torch.tensor(loss, requires_grad=True).to(DEVICE)
-        #print(loss)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-    '''
+        self.rewards, self.probs = [], []
     
+    def get_probability(self, state, action):
+        state_tensor = torch.Tensor([state]).to(DEVICE)
+        action_tensor = torch.Tensor([action]).to(DEVICE)
+        with torch.no_grad():
+            prediction = self.model(state_tensor)
+            probability = torch.distributions.Categorical(prediction)
+        return probability.log_prob(action_tensor)
+
     def make_action(self, state, test=False):
         #https://pytorch.apachecn.org/docs/0.3/distributions.html
         state_tensor = torch.Tensor([state]).to(DEVICE)
         prediction = self.model(state_tensor)
         probability = torch.distributions.Categorical(prediction)
         action = probability.sample()
-        self.saved_actions.append(probability.log_prob(action))
+        self.probs.append(probability.log_prob(action))
         return action.item()
     
     def update(self):
@@ -117,12 +80,28 @@ class AgentPG(Agent):
             reward.append(R)
         reward = list(reversed(reward))
 
+        Z = 0
+        b = 0
+        Z_s = []
+
+        p = 0
+        q = 0
+        for i in range(len(reward)):
+            p += self.get_probability(self.states[i], self.actions[i])
+            q += self.probs[i]
+        z = exp(p) / exp(q)
+        b = z * sum(reward) / len(reward)
+
+
+
         # TODO:
         # compute PG loss
         # loss = sum(-R_i * log(action_prob))
         loss = 0
         for i in range(len(reward)):
-            loss += -reward[i] * self.saved_actions[i]
+            loss += - (reward[i] - b) * self.probs[i]
+        loss /= z
+
         #loss = torch.tensor(loss, requires_grad=True).to(DEVICE)
 
         self.optimizer.zero_grad()
@@ -141,6 +120,8 @@ class AgentPG(Agent):
                 state, reward, done, _ = self.env.step(action)
 
                 self.rewards.append(reward)
+                self.states.append(state)
+                self.actions.append(action)
 
             # update model
             self.update()
