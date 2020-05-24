@@ -174,10 +174,10 @@ class AgentDQN(Agent):
         next_state = next_state.cuda() if use_cuda else next_state
 
         # step 2: Compute Q(s_t, a) with your model.
-        o_q = self.online_net(state)
+        o_q = self.online_net(state.squeeze(1))
         # step 3: Compute Q(s_{t+1}, a) with target model.
         with torch.no_grad():
-            t_q = self.target_net(next_state)
+            t_q = self.target_net(next_state.squeeze(1))
         # step 4: Compute the expected Q values: rewards + gamma * max(Q(s_{t+1}, a))
         expected_q = reward + self.GAMMA * torch.stack([t_q[i][o_q[i].argmax()] for i in range(self.batch_size)]).cuda()
         
