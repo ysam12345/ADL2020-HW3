@@ -162,12 +162,12 @@ class AgentDQN(Agent):
         loss = torch.Tensor([0])
         loss = loss.cuda() if use_cuda else loss
         # print(experience['state'])
-        state = torch.cat(experience['state'])
+        state = torch.stack(experience['state'])
         #action = torch.cat(experience['action'])
         action = experience['action']
         reward = torch.Tensor(experience['reward'])
         #reward = experience['reward']
-        next_state = torch.cat(experience['next_state'])
+        next_state = torch.stack(experience['next_state'])
 
         state = state.cuda() if use_cuda else state
         reward = reward.cuda() if use_cuda else reward
@@ -182,7 +182,7 @@ class AgentDQN(Agent):
         expected_q = reward + self.GAMMA * torch.stack([t_q[i][o_q[i].argmax()] for i in range(self.batch_size)]).cuda()
         
         # step 5: Compute temporal difference loss
-        loss = ((torch.stack([o_q[i][action[i]]for i in range(self.batch_size)])-expected_q)**2).mean()
+        loss = ((torch.stack([o_q[i][action[i]] for i in range(self.batch_size)])-expected_q)**2).mean()
         # HINT:
         # 1. You should not backprop to the target model in step 3 (Use torch.no_grad)
         # 2. You should carefully deal with gamma * max(Q(s_{t+1}, a)) when it
